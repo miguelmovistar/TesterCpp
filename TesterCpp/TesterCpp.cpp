@@ -73,6 +73,7 @@ public:
     }
 };
 
+
 FileWatcher fileWatcher{ "C:\\CLEARX\\Config" };
 xml_document configurationFile;
 
