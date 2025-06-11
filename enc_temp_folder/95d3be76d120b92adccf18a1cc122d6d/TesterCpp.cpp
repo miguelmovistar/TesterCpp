@@ -82,8 +82,11 @@ int main()
     std::cout << "Hello World!\n";
     std::cout << "Otra manera!\n" << std::endl;
 
-    configurationFile.load_file("C:\\CLEARX\\Config\\UserConfigV2.xml");
-    
+    //configurationFile.load_file("C:\\CLEARX\\Config\\UserConfigV2.xml");
+    if (!fileWatcher._paths.empty())
+    {
+        configurationFile.load_file(fileWatcher._paths.begin()->first.data());
+    }
 }
 
 void GetConfigFile() 
