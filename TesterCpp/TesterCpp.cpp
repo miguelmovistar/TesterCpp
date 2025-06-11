@@ -4,85 +4,98 @@
 #include <unordered_map>
 #include <functional>
 
+#include <thread>     // Para std::this_thread::sleep_for
+#include <chrono>     // Para std::chrono
+
 using namespace std;
 using namespace pugi;
 
-// ENUMS
-enum class FileStatus {created, modified, erased};
+enum class FileStatus { Creado, Eliminado, Modificado };
 
-// LAS CLASES VAN PRIMERO
 class FileWatcher {
-private:
-    bool bRuninng = true; // Nunca ocupa esta variable
-
-    // Variables públicas
 public:
     std::string path_to_watch;
     std::unordered_map<std::string, std::filesystem::file_time_type> _paths;
 
-    // Constructor
-    // Recorre el directorio en busca de archivos. Y por qué no solo apunta a uno y ya?
-    FileWatcher(std::string path_to_watch) {
-        for (auto& file : std::filesystem::recursive_directory_iterator(path_to_watch)) {
-            _paths[file.path().string()] = std::filesystem::last_write_time(file);            
+    FileWatcher(std::string path_to_watch) : path_to_watch(path_to_watch) {
+        for (const auto& entry : std::filesystem::recursive_directory_iterator(path_to_watch)) {
+            if (std::filesystem::is_regular_file(entry)) {
+                _paths[entry.path().string()] = std::filesystem::last_write_time(entry);
+            }
         }
     }
 
-    //Método
-    void start(const std::function<void(std::string, FileStatus)>& action) 
-    {
-        // Obtiene el primer archivo de la lista
-        auto it = _paths.begin();
+    // Método para verificar cambios
+    void check_for_changes(std::function<void(const std::string&, FileStatus)> callback) {
+        
+        // 1. Verificar archivos modificados o eliminados
+        std::unordered_map<std::string, std::filesystem::file_time_type> current_paths = _paths;
 
-        // Checa si el archivo fue borrado
-        while (it != _paths.end()) // Itera mientras no llegue al final de la lista
-        {
-            // Si no existe
-            if (!std::filesystem::exists(it->first)) 
-            {
-                action(it->first, FileStatus::erased);
-                it = _paths.erase(it);
+        for (auto it = current_paths.begin(); it != current_paths.end(); ) {
+            const std::string& path = it->first;
+            if (!std::filesystem::exists(path)) {
+                callback(path, FileStatus::Eliminado);
+                _paths.erase(path);
+                it = current_paths.erase(it);
             }
-            else // Si existe
-            {
-                it++;
+            else {
+                auto last_write_time = std::filesystem::last_write_time(path);
+                if (last_write_time != _paths[path]) {
+                    callback(path, FileStatus::Modificado);
+                    _paths[path] = last_write_time;
+                }
+                ++it;
             }
         }
 
-        // Checha si el archivo fue creado o modificado
-        // Recorre el directorio en busca de archivos. Y por qué no solo apunta a uno y ya?
-        for (auto& file : std::filesystem::recursive_directory_iterator(path_to_watch))
-        {
-            auto current_file_last_write_time = std::filesystem::last_write_time(file);
-
-            if (!_paths.contains(file.path().string()))
-            {
-                _paths[file.path().string()] = current_file_last_write_time;
-                action(file.path().string(), FileStatus::created); //File created
-            }
-            else
-            {
-                if (_paths[file.path().string()] != current_file_last_write_time)
-                {
-                    _paths[file.path().string()] = current_file_last_write_time;
-                    action(file.path().string(), FileStatus::modified);
+        // 2. Verificar archivos nuevos
+        for (const auto& entry : std::filesystem::recursive_directory_iterator(path_to_watch)) {
+            if (std::filesystem::is_regular_file(entry)) {
+                const std::string& path = entry.path().string();
+                if (_paths.find(path) == _paths.end()) {
+                    // Archivo nuevo
+                    callback(path, FileStatus::Creado);
+                    _paths[path] = std::filesystem::last_write_time(entry);
                 }
             }
         }
-
     }
 };
 
 
-FileWatcher fileWatcher{ "C:\\CLEARX\\Config" };
+FileWatcher fileWatcher{"C:\\CLEARX\\Config"};
 xml_document configurationFile;
 
 int main()
 {
-    std::cout << "Hello World!\n";
-    std::cout << "Otra manera!\n" << std::endl;
+   /* std::cout << "Hello World!\n";
+    std::cout << "Otra manera!\n" << std::endl;*/
 
-    configurationFile.load_file("C:\\CLEARX\\Config\\UserConfigV2.xml");
+    while (true) {
+        fileWatcher.check_for_changes([&](const std::string& path, FileStatus status) {
+            std::cout << "Archivo " << path << " ";
+            if (status == FileStatus::Creado) {
+                std::cout << "creado.\n";
+            }
+            else if (status == FileStatus::Eliminado) {
+                std::cout << "eliminado.\n";
+            }
+            else if (status == FileStatus::Modificado) {
+                std::cout << "modificado.\n";
+                if (path.find("UserConfigV2.xml") != std::string::npos) {
+                    if (configurationFile.load_file(path.c_str())) {
+                        std::cout << "UserConfigV2.xml recargado debido a modificación.\n";
+                        // Aquí podrías procesar el XML actualizado
+                    }
+                    else {
+                        std::cout << "Error al recargar UserConfigV2.xml.\n";
+                    }
+                }
+            }
+            });
+        std::this_thread::sleep_for(std::chrono::seconds(1)); // Espera 5 segundos antes de volver a verificar
+    }
+
     
 }
 
