@@ -529,14 +529,6 @@ XLstatus demoInitDriver() {
   // Get the channels
   xlStatus = g_xlDrvConfig.fctGetChannelConfig(g_xlDrvConfig.configHandle, &g_xlChannelConfig);
 
-  printf("----------------------------------------------------------\n\n");
-  printf("XL_TRANSCEIVER_TYPE_NONE           0x0000\n");
-  printf("XL_TRANSCEIVER_TYPE_CAN_VIRTUAL    0x0016\n");
-  printf("----------------------------------------------------------\n\n");
-  printf("TOTAL Devices : %2d \n", g_xlDevConfig.count);
-  printf("TOTAL Channels: %2d\n", g_xlChannelConfig.count);
-  printf("----------------------------------------------------------\n\n");
-
   for (unsigned int devIdx = 0; devIdx < g_xlDevConfig.count; devIdx++) {
       const XLdeviceDrvConfigV1* device = &g_xlDevConfig.item[devIdx];
      
