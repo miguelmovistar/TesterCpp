@@ -25,6 +25,8 @@
 #define ENABLE_CAN_FD_MODE_NO_ISO  0        // Set to 1 to activate NO-ISO mode on capable CAN FD channels
 
 #include "vxlapi.h"
+#include <inttypes.h>
+
 
 // Track additional information about a channel
 typedef struct {
@@ -140,33 +142,6 @@ void demoHelp(void) {
 ////////////////////////////////////////////////////////////////////////////
 
 void demoPrintConfig(void) {
-  char         str[100];
-
-  printf("----------------------------------------------------------\n");
-  printf("-                Hardware Configuration                  -\n");
-  printf("- %2d devices with %3d channels                           -\n", g_xlDevConfig.count, g_xlChannelConfig.count);
-  printf("----------------------------------------------------------\n");
-
-  for (unsigned int devIdx = 0; devIdx < g_xlDevConfig.count; devIdx++) {
-    const XLdeviceDrvConfigV1* device = &g_xlDevConfig.item[devIdx];
-
-    printf("%s (%d channels):\n", device->name, device->channelList.count);
-
-    for (unsigned int chIdx = 0; chIdx < device->channelList.count; chIdx++) {
-      printf("- Ch:%02d", device->channelList.item[chIdx].channelIndex);   
-
-      if (device->channelList.item[chIdx].transceiver.type != XL_TRANSCEIVER_TYPE_NONE) {
-        strncpy_s(str, 100, device->channelList.item[chIdx].transceiver.name, 48);
-        printf(" %-48s -\n", str);
-      }
-      else {
-        printf("    no Cab!   -\n");
-      }
-    }
-    printf("\n");
-  }
-  
-  printf("----------------------------------------------------------\n\n");
  
 }
 
@@ -418,39 +393,181 @@ XLstatus demoCreateRxThread(void) {
 //!
 ////////////////////////////////////////////////////////////////////////////
 
+char* decimal_to_hexadecimal(int decimal) {
+    if (decimal == 0) {
+        char* hex_string = (char*)malloc(2);
+        if (hex_string == NULL) {
+            perror("Error al asignar memoria");
+            exit(EXIT_FAILURE);
+        }
+        strcpy(hex_string, "0");
+        return hex_string;
+    }
+
+    int temp = decimal;
+    int num_digits = 0;
+    while (temp != 0) {
+        temp /= 16;
+        num_digits++;
+    }
+
+    char* hex_string = (char*)malloc(num_digits + 1);
+    if (hex_string == NULL) {
+        perror("Error al asignar memoria");
+        exit(EXIT_FAILURE);
+    }
+
+    hex_string[num_digits] = '\0';
+    temp = decimal;
+
+    while (temp != 0) {
+        int remainder = temp % 16;
+        char hex_digit;
+        if (remainder < 10) {
+            hex_digit = remainder + '0';
+        }
+        else {
+            hex_digit = (remainder - 10) + 'A';
+        }
+        hex_string[--num_digits] = hex_digit;
+        temp /= 16;
+    }
+    return hex_string;
+}
+
+char* GethwTypeName(int hwType) {
+    char* result;
+
+    switch (hwType) {
+    case 0:
+        result = "XL_HWTYPE_NONE";
+        break;
+    case 1:
+        result = "XL_HWTYPE_VIRTUAL";
+        break;
+    case 59:
+        result = "XL_HWTYPE_VN1640";
+        break;
+    default:
+        result = "UNDEFINED";
+        break;
+    }
+    return result;
+}
+
+char* GetbusType(int busType) {
+    char* result;
+
+    switch (busType) {
+    case 0x00000000u:
+        result = "XL_BUS_TYPE_NONE";
+        break;
+    case 0x00000001u:
+        result = "XL_BUS_TYPE_CAN";
+        break;
+    case 0x00000002u:
+        result = "XL_BUS_TYPE_LIN";
+        break;
+    default:
+        result = "UNDEFINED";
+        break;
+    }
+    return result;
+}
+
+char* GetinterfaceVersion(int interfaceVersion) {
+    char* result;
+
+    switch (interfaceVersion) {
+    case 2:
+        result = "XL_INTERFACE_VERSION_V2";
+        break;
+    case 3:
+        result = "XL_INTERFACE_VERSION_V3";
+        break;
+    case 4:
+        result = "XL_INTERFACE_VERSION_V4";
+        break;
+    default:
+        result = "UNDEFINED";
+        break;
+    }
+    return result;
+}
+
+char* Gettransceivertype(int transceivertype) {
+    char* result;
+
+    switch (transceivertype) {
+    case 0x0000:
+        result = "XL_TRANSCEIVER_TYPE_NONE";
+        break;
+    case 0x0016:
+        result = "XL_TRANSCEIVER_TYPE_CAN_VIRTUAL";
+        break;
+    default:
+        result = "UNDEFINED";
+        break;
+    }
+    return result;
+}
+
+
+
+
 XLstatus demoInitDriver() {
 
   XLstatus xlStatus;
   
-  // ------------------------------------
-  // open the driver
-  // ------------------------------------
   xlStatus = xlOpenDriver();
   
-  // ------------------------------------
-  // get/print the hardware configuration
-  // ------------------------------------
-  if(XL_SUCCESS == xlStatus) {
-    // Use xlCreateDriverConfig instead of xlGetDriverConfig
-    xlStatus = xlCreateDriverConfig(XL_IDRIVER_CONFIG_VERSION_1, (struct XLIDriverConfig*)&g_xlDrvConfig);
+  xlStatus = xlCreateDriverConfig(XL_IDRIVER_CONFIG_VERSION_1, (struct XLIDriverConfig*)&g_xlDrvConfig);
 
-    // Get the devices
-    xlStatus = g_xlDrvConfig.fctGetDeviceConfig(g_xlDrvConfig.configHandle, &g_xlDevConfig);
-    if (xlStatus != XL_SUCCESS) {
-      printf("ERROR: Could not get device configuration. %s\n", xlGetErrorString(xlStatus));
-      return xlStatus;
-    }
+  // Get the devices
+  xlStatus = g_xlDrvConfig.fctGetDeviceConfig(g_xlDrvConfig.configHandle, &g_xlDevConfig);
 
-    // Get the channels
-    xlStatus = g_xlDrvConfig.fctGetChannelConfig(g_xlDrvConfig.configHandle, &g_xlChannelConfig);
-    if (xlStatus != XL_SUCCESS) {
-      printf("ERROR: Could not get channel configuration. %s\n", xlGetErrorString(xlStatus));
-      return xlStatus;
-    }
+  // Get the channels
+  xlStatus = g_xlDrvConfig.fctGetChannelConfig(g_xlDrvConfig.configHandle, &g_xlChannelConfig);
+
+  printf("----------------------------------------------------------\n\n");
+  printf("XL_TRANSCEIVER_TYPE_NONE           0x0000\n");
+  printf("XL_TRANSCEIVER_TYPE_CAN_VIRTUAL    0x0016\n");
+  printf("----------------------------------------------------------\n\n");
+  printf("TOTAL Devices : %2d \n", g_xlDevConfig.count);
+  printf("TOTAL Channels: %2d\n", g_xlChannelConfig.count);
+  printf("----------------------------------------------------------\n\n");
+
+  for (unsigned int devIdx = 0; devIdx < g_xlDevConfig.count; devIdx++) {
+      const XLdeviceDrvConfigV1* device = &g_xlDevConfig.item[devIdx];
+     
+      for (unsigned int chIdx = 0; chIdx < device->channelList.count; chIdx++) {
+          printf("\n\n");
+          printf("- name                          : %s %d\n", device->name, chIdx);
+          printf("- articleNumber                 : %d \n", device->articleNumber);
+          printf("- channelBusCapabilities        : %" PRIu64 "\n", device->channelList.item[chIdx].channelBusCapabilities);
+          printf("- channelCapabilities           : %" PRId64 "\n", device->channelList.item[chIdx].channelCapabilities);
+          printf("- busType                       : %s (%d) \n", GetbusType(device->channelList.item[chIdx].busParams.busType), device->channelList.item[chIdx].busParams.busType);
+          printf("- channelIndex                  : %d \n", device->channelList.item[chIdx].channelIndex);
+          printf("- connectedBusType              : %s (%" PRId64 ") \n", GetbusType(device->channelList.item[chIdx].connectedBusType), device->channelList.item[chIdx].connectedBusType);
+          printf("- hwChannel                     : %d \n", device->channelList.item[chIdx].hwChannel);
+          printf("- hwIndex                       : %d \n", device->hwIndex);
+          printf("- hwType                        : %s (%d) \n", GethwTypeName(device->hwType), device->hwType);
+          printf("- interfaceVersion              : %s (%d) \n", GetinterfaceVersion(device->channelList.item[chIdx].interfaceVersion), device->channelList.item[chIdx].interfaceVersion);
+          printf("- isOnBus                       : %d \n", device->channelList.item[chIdx].isOnBus);
+          printf("- serialNumber                  : %d \n", device->serialNumber);
+          printf("- transceiver.name              : %s \n", device->channelList.item[chIdx].transceiver.name);
+          printf("- transceiver.configError       : %d \n", device->channelList.item[chIdx].transceiver.configError);
+          printf("- transceiver.type              : %s (%d) \n", Gettransceivertype(device->channelList.item[chIdx].transceiver.type), device->channelList.item[chIdx].transceiver.type);
+      }
   }
+
   
+
+
+
+
   if (XL_SUCCESS == xlStatus) {
-    demoPrintConfig();
+    
 
     printf("Usage: xlCANdemo <BaudRate> <ApplicationName> <Identifier>\n\n");
 
@@ -640,13 +757,6 @@ static XLstatus demoCleanUp(void)
   return XL_SUCCESS;    // No error handling
 }
 
-////////////////////////////////////////////////////////////////////////////
-
-//! main
-
-//! 
-//!
-////////////////////////////////////////////////////////////////////////////
 
 int main(int argc, char *argv[])
 {
@@ -658,46 +768,11 @@ int main(int argc, char *argv[])
   int           outputMode = XL_OUTPUT_MODE_NORMAL;
 
 
-  printf("----------------------------------------------------------\n");
-  printf("- xlCANdemo - Test Application for XL Family Driver API  -\n");
-  printf("-             Vector Informatik GmbH,  " __DATE__"       -\n");
-#ifdef _WIN64
-  printf("-             - 64bit Version -                          -\n");
-#endif
-  printf("----------------------------------------------------------\n");
 
-  // ------------------------------------
-  // commandline may specify application 
-  // name and baudrate
-  // ------------------------------------
-  if (argc > 1) {
-    g_BaudRate = atoi(argv[1]);
-    if (g_BaudRate) {
-      printf("Baudrate = %u\n", g_BaudRate);
-      argc--;
-      argv++;
-    }
-  }
-  if (argc > 1) {
-    strncpy_s(g_AppName, XL_MAX_APPNAME, argv[1], XL_MAX_APPNAME);
-    g_AppName[XL_MAX_APPNAME] = 0;
-    printf("AppName = %s\n", g_AppName);
-    argc--;
-    argv++;
-  }
-  if (argc > 1) {
-    sscanf_s (argv[1], "%x", &txID ) ;
-    if (txID) {
-      printf("TX ID = %x\n", txID);
-    }
-  }
 
-  // ------------------------------------
-  // initialize the driver structures 
-  // for the application
-  // ------------------------------------
+  
   xlStatus = demoInitDriver();
-  printf("- Init             : %s\n",  xlGetErrorString(xlStatus));
+  
   
   if(XL_SUCCESS == xlStatus) {
     // ------------------------------------
